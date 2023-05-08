@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melochrome</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+        }
+        #audioFile {
+            display: none;
+        }
+        #audioPlayer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(32, 58, 67, 0.8);
+            width: 100%;
+            z-index: 12;
+            margin: 0;
+            border: none;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: transparent;
+        }
+        #fullScreen {
+            position: fixed;
+            bottom: 60px; /* Updated from 10px to 60px to avoid overlapping with the audio player */
+            right: 10px;
+            z-index: 11;
+            background-color: rgba(32, 58, 67, 0.8);
+            border: none;
+            border-radius: 5px;
+            padding: 5px;
+            cursor: pointer;
+            color: #ffffff;
+        }
+
+        label {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(32, 58, 67, 0.8);
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <label for="audioFile">Choose Audio File</label>
+    <input type="file" id="audioFile" accept="audio/mp3">
+    <button id="fullScreen">Full Screen</button>
+    <canvas id="visualizer"></canvas>
+    <audio id="audioPlayer" controls></audio>
+
+    <script>
+        const fileInput = document.getElementById("audioFile");
+        const canvas = document.getElementById("visualizer");
+        const ctx = canvas.getContext("2d");
+        const audioPlayer = document.getElementById("audioPlayer");
+        const fullScreenBtn = document.getElementById("fullScreen");
+
+        let audioContext, analyser, source, animationFrameId;
+
+        function setCanvasResolution(canvas, ctx) {
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const backingStoreRatio = ctx.webkitBackingStorePixelRatio ||
+                ctx.mozBackingStorePixelRatio ||
+                ctx.msBackingStorePixelRatio ||
+                ctx.oBackingStorePixelRatio ||
+                ctx.backingStorePixelRatio || 1;
+
+            const ratio = devicePixelRatio / backingStoreRatio;
+
+            if (devicePixelRatio !== backingStoreRatio) {
+                const oldWidth = canvas.width;
+                const oldHeight = canvas.height;
+
+                canvas.width = oldWidth * ratio;
+                canvas.height = oldHeight * ratio;
+
+                canvas.style.width = oldWidth + 'px';
+                canvas.style.height = oldHeight + 'px';
+
+                ctx.scale(ratio, ratio);
+            }
+        }
+
+        function resetVisualizer() {
+            if (source) {
+                source.disconnect();
+                analyser.disconnect(); // Disconnect the analyser node
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+        }
+
+        fileInput.addEventListener("change", (e) => {
+        resetVisualizer();
+
+        const file = e.target.files[0];
+        if (!file) return;
+
+        audioPlayer.src = URL.createObjectURL(file);
+
+        audioPlayer.addEventListener("loadeddata", async () => {
+        try {
+            await audioPlayer.play();
+        } catch (error) {
+            console.error("Failed to play the audio:", error);
+        }
+
+        if (audioContext) {
+            if (source) {
+                source.disconnect(); // Disconnect the previous source node
+            }
+            audioContext.close();
+        }
+
+        audioContext = new AudioContext();
+
+        source = audioContext.createMediaElementSource(audioPlayer);
+        analyser = audioContext.createAnalyser();
+
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+
+        analyser.fftSize = 1024;
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const reducedBufferLength = Math.floor(bufferLength * 0.5); // Use 50% of buffer length to focus on lower frequencies (up to 12 kHz)
+
+        canvas.width = 1280;
+        canvas.height = 720;
+        setCanvasResolution(canvas, ctx);
+
+        let colorOffset = 0;
+
+        // Attack and release values
+        const attack = 0.9;
+        const release = 1.9;
+
+        function draw() {
+            animationFrameId = requestAnimationFrame(draw); // Save the requestAnimationFrame ID
+            analyser.getByteFrequencyData(dataArray);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const barWidth = canvas.width / reducedBufferLength;
+            let x = 0;
+
+            const sensitivityValue = 0; // Set sensitivity to 0dB
+            const thresholdValue = (100 + sensitivityValue) / 100;
+
+            colorOffset = (colorOffset + 0.5) % reducedBufferLength; // change the int to adjust the speed
+
+            for (let i = 0; i < reducedBufferLength; i++) {
+                const rawIntensity = dataArray[Math.floor(i / 2)] / 256 * thresholdValue;
+                const attackIntensity = Math.min(1, rawIntensity * attack);
+                const releaseIntensity = Math.max(0, (rawIntensity - (1 / release)) * release);
+                const intensity = Math.max(attackIntensity, releaseIntensity);
+
+                let r, g, b;
+
+                const index = (i + colorOffset) % reducedBufferLength;
+                const ratio = index / reducedBufferLength;
+
+                if (ratio < 0.2) {
+                    // Purple to Blue
+                    r = 128 * (1 - ratio * 5) * intensity;
+                    g = 0;
+                    b = 128 * intensity + 128 * ratio * 5 * intensity;
+                } else if (ratio < 0.4) {
+                    // Blue to Green
+                    r = 0;
+                    g = 256 * (ratio - 0.2) * 5 * intensity;
+                    b = 256 * (1 - (ratio - 0.2) * 5) * intensity;
+                } else if (ratio < 0.6) {
+                    // Green to Yellow
+                    r = 256 * (ratio - 0.4) * 5 * intensity;
+                    g = 256 * intensity;
+                    b = 0;
+                } else if (ratio < 0.8) {
+                    // Yellow to Red
+                    r = 256 * intensity;
+                    g = 256 * intensity - 256 * (ratio - 0.6) * 5 * intensity;
+                    b = 0;
+                } else {
+                    // Red to Purple
+                    r = 256 * intensity - 128 * (ratio - 0.8) * 5 * intensity;
+                    g = 0;
+                    b = 128 * (ratio - 0.8) * 5 * intensity;
+                }
+
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 1)`;
+                ctx.fillRect(x, 0, barWidth, canvas.height);
+
+                x += barWidth;
+            }
+        }
+
+        draw();
+    }, { once: true });
+
+    audioPlayer.load();
+});
+
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                if (canvas.requestFullscreen) {
+                    canvas.requestFullscreen();
+                } else if (canvas.mozRequestFullScreen) { // Firefox
+                    canvas.mozRequestFullScreen();
+                } else if (canvas.webkitRequestFullscreen) { // Chrome, Safari and Opera
+                    canvas.webkitRequestFullscreen();
+                } else if (canvas.msRequestFullscreen) { // IE/Edge
+                    canvas.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) { // Firefox
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) { // Chrome, Safari and Opera
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) { // IE/Edge
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        fullScreenBtn.addEventListener("click", toggleFullScreen);
+
+        // Resize the canvas when the window is resized
+        window.addEventListener("resize", () => {
+            canvas.width = 1280;
+            canvas.height = 720;
+            setCanvasResolution(canvas, ctx);
+        });
+    </script>
+</body>
+</html>

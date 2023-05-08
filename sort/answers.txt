@@ -1,0 +1,11 @@
+sort1 uses: Bubble sort
+
+How do you know?: The runtimes for sort1 and sort3 seem to increase significantly as the size of the input list grows, especially for the reversed input lists. This could suggest that they are using sorting algorithms that have a higher time complexity, such as bubble sort or selection sort.
+
+sort2 uses: Merge sort
+
+How do you know?: sort2 has much faster runtimes for all input sizes and types, indicating that it is using a more efficient sorting algorithm, such as merge sort, which has a lower time complexity.
+
+sort3 uses: Selection
+
+How do you know?: The runtimes for sort1 and sort3 seem to increase significantly as the size of the input list grows, especially for the reversed input lists. This could suggest that they are using sorting algorithms that have a higher time complexity, such as bubble sort or selection sort.

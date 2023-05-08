@@ -1,0 +1,22 @@
+Times:
+
+10 simulations: 0m0.026s
+100 simulations: 0m0.027s
+1000 simulations: 0m0.033s
+10000 simulations: 0m0.091s
+100000 simulations: 0m0.790s
+1000000 simulations: 0m6.858s
+
+Questions:
+
+Which predictions, if any, proved incorrect as you increased the number of simulations?:
+
+As the number of simulations increased, winning probabilities for most teams stabilized.
+Notable changes in winning probabilities were observed for Switzerland, Denmark, and Brazil between 10 and 100 simulations.
+Beyond 1000 simulations, predictions became more stable.
+
+Suppose you're charged a fee for each second of compute time your program uses.
+After how many simulations would you call the predictions "good enough"?:
+
+Considering the balance between accuracy and computational cost, running 1000 simulations can be considered "good enough"
+as predictions become more stable and the total time taken is 0m0.011s, which is relatively low.
